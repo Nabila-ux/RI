@@ -437,4 +437,170 @@
 
         // Switch Tabs
         function switchTab(tabName) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remov
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            if (tabName === 'search') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('tab-search').classList.add('active');
+            } else {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('tab-favorites').classList.add('active');
+            }
+        }
+
+        // Search Address
+        async function searchLocation() {
+            const query = document.getElementById('address-input').value.trim();
+            const resultsList = document.getElementById('results-list');
+            resultsList.innerHTML = '';
+
+            if (!query) return;
+
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=my&limit=5`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.length === 0) {
+                    resultsList.innerHTML = '<li style="color:red;">No location found in Malaysia.</li>';
+                    return;
+                }
+
+                data.forEach(item => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span class="fav-desc">${item.display_name}</span>`;
+                    li.onclick = () => selectLocation(item.lat, item.lon, item.display_name);
+                    resultsList.appendChild(li);
+                });
+            } catch (error) {
+                alert("Search failed. Check your internet.");
+            }
+        }
+
+        document.getElementById('address-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchLocation();
+        });
+
+        // Select Location
+        function selectLocation(lat, lon, displayName, customTitle = null) {
+            const latitude = parseFloat(lat);
+            const longitude = parseFloat(lon);
+
+            activeSelectedData = { lat: latitude, lon: longitude, address: displayName };
+
+            map.flyTo([latitude, longitude], 16);
+
+            if (searchMarker) {
+                searchMarker.setLatLng([latitude, longitude]);
+            } else {
+                searchMarker = L.marker([latitude, longitude]).addTo(map);
+            }
+
+            document.getElementById('loc-title').innerText = customTitle ? `📍 ${customTitle}` : 'Selected Location';
+            document.getElementById('loc-address').innerText = displayName;
+            document.getElementById('info-panel').style.display = 'block';
+
+            document.getElementById('btn-gmaps').href = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+            document.getElementById('btn-waze').href = `https://waze.com/ul?ll=${latitude},${longitude}&navigate=yes`;
+
+            document.getElementById('results-list').innerHTML = '';
+        }
+
+        // Map Click
+        map.on('click', async function(e) {
+            const { lat, lng } = e.latlng;
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                const address = data.display_name || `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`;
+                selectLocation(lat, lng, address);
+            } catch (err) {
+                selectLocation(lat, lng, `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`);
+            }
+        });
+
+        // Save Current Location -> Push to Cloud
+        async function saveCurrentToFavorites() {
+            if (!activeSelectedData) return;
+
+            const name = prompt("Enter a label for this location:\n(e.g., My House, Mom's House, Sabah Office)", "My Saved Place");
+            if (!name || name.trim() === '') return;
+
+            const newFav = {
+                id: Date.now(),
+                name: name.trim(),
+                lat: activeSelectedData.lat,
+                lon: activeSelectedData.lon,
+                address: activeSelectedData.address
+            };
+
+            favorites.push(newFav);
+            renderFavorites();
+            await pushToCloud(); // Upload to Cloud!
+            alert(`Saved "${name}" and synced to cloud! ⭐`);
+        }
+
+        // Render Favorites List & Star Markers
+        function renderFavorites() {
+            const list = document.getElementById('favorites-list');
+            document.getElementById('fav-count').innerText = favorites.length;
+            list.innerHTML = '';
+
+            favoriteMarkersOnMap.forEach(marker => map.removeLayer(marker));
+            favoriteMarkersOnMap = [];
+
+            if (favorites.length === 0) {
+                list.innerHTML = '<li style="color:#888; font-size: 0.8rem; text-align:center;">No synced places yet.<br>Select a location and save it!</li>';
+                return;
+            }
+
+            favorites.forEach(fav => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <div class="fav-info" onclick="selectLocation(${fav.lat}, ${fav.lon}, '${escapeQuotes(fav.address)}', '${escapeQuotes(fav.name)}')">
+                        <span class="fav-title">⭐ ${fav.name}</span>
+                        <span class="fav-desc">${fav.address}</span>
+                    </div>
+                    <button class="btn-delete" title="Delete Favorite" onclick="deleteFavorite(${fav.id}, event)">🗑️</button>
+                `;
+                list.appendChild(li);
+
+                const starMarker = L.marker([fav.lat, fav.lon], { icon: starIcon }).addTo(map);
+                starMarker.on('click', () => {
+                    selectLocation(fav.lat, fav.lon, fav.address, fav.name);
+                });
+
+                favoriteMarkersOnMap.push(starMarker);
+            });
+        }
+
+        // Share Sync Link
+        function shareLiveSyncLink() {
+            const shareableUrl = `${window.location.origin}${window.location.pathname}#sync=${currentSyncId}`;
+
+            navigator.clipboard.writeText(shareableUrl).then(() => {
+                alert(`🔗 Link copied!\n\nSync Code: "${currentSyncId}"\n\nSend this link to your second device or friend. Whatever is added on one device will show up on the other!`);
+            }).catch(() => {
+                prompt("Copy this Live Sync Link:", shareableUrl);
+            });
+        }
+
+        // Delete Favorite
+        async function deleteFavorite(id, event) {
+            event.stopPropagation();
+            if (confirm("Delete this star location?")) {
+                favorites = favorites.filter(fav => fav.id !== id);
+                renderFavorites();
+                await pushToCloud(); // Sync deletion to cloud
+            }
+        }
+
+        function escapeQuotes(str) {
+            return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+    </script>
+</body>
+</html>

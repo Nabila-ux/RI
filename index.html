@@ -48,9 +48,6 @@
             border-radius: 12px;
             font-size: 0.75rem;
             font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 5px;
         }
 
         /* Floating Sidebar / Panel */
@@ -308,14 +305,14 @@
 
     <header>
         <h1>🏠 Malaysia House Locator</h1>
-        <div class="sync-badge">🔴 Live Sync Active</div>
+        <div class="sync-badge" id="status-indicator">🟢 Cloud Sync Active</div>
     </header>
 
     <div id="main-panel">
         <!-- Live Sync Group Input -->
         <div class="sync-box">
             <label>Sync ID:</label>
-            <input type="text" id="sync-id-input" value="MY-HOUSES-1" onchange="changeSyncGroup(this.value)" />
+            <input type="text" id="sync-id-input" value="SABAH-KL-HOUSES" onchange="changeSyncGroup(this.value)" />
             <button class="btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="changeSyncGroup(document.getElementById('sync-id-input').value)">Join</button>
         </div>
 
@@ -336,7 +333,7 @@
 
         <!-- Tab 2: Favorites Library -->
         <div id="tab-favorites" class="tab-content">
-            <button class="btn-share" onclick="shareLiveSyncLink()">🔗 Share Live Sync Link</button>
+            <button class="btn-share" onclick="shareLiveSyncLink()">🔗 Copy Sync Link for Other Devices</button>
             <ul id="favorites-list" class="list-container" style="max-height: 200px;"></ul>
         </div>
 
@@ -345,7 +342,7 @@
             <h3 id="loc-title">Selected Location</h3>
             <p id="loc-address">Address details will appear here.</p>
             
-            <button class="btn-save-fav" onclick="saveCurrentToFavorites()">⭐ Save & Sync To Live Map</button>
+            <button class="btn-save-fav" onclick="saveCurrentToFavorites()">⭐ Save & Sync To All Devices</button>
 
             <div class="nav-buttons">
                 <a id="btn-gmaps" class="nav-btn btn-gmaps" target="_blank">Google Maps</a>
@@ -359,19 +356,11 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <!-- Firebase Realtime Database SDK for Live Synchronization -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-
     <script>
-        // 1. Initialize Firebase Cloud Database for Realtime Syncing
-        const firebaseConfig = {
-            databaseURL: "https://my-house-locator-default-rtdb.asia-southeast1.firebasedatabase.app/"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+        // Public Cloud Storage Bucket ID
+        const CLOUD_BUCKET = "3a8K9b2C1xL7zP9Q"; 
 
-        // 2. Initialize Leaflet Map over Malaysia
+        // Initialize Map over Malaysia
         const map = L.map('map').setView([4.2105, 108.9758], 6);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -383,7 +372,7 @@
         let activeSelectedData = null; 
         let favoriteMarkersOnMap = [];
         let favorites = [];
-        let currentSyncId = "MY-HOUSES-1";
+        let currentSyncId = "SABAH-KL-HOUSES";
 
         const starIcon = L.divIcon({
             className: 'star-marker-icon',
@@ -392,206 +381,60 @@
             iconAnchor: [15, 15]
         });
 
-        // 3. Connect to Sync ID from URL hash or default
+        // 1. Read Sync ID from URL hash if opening shared link
         const hashMatch = window.location.hash.match(/sync=([A-Za-z0-9_-]+)/);
         if (hashMatch && hashMatch[1]) {
             currentSyncId = hashMatch[1].toUpperCase();
         }
         document.getElementById('sync-id-input').value = currentSyncId;
 
-        // Listen for live updates from Cloud
-        connectToLiveSyncGroup(currentSyncId);
+        // 2. Fetch Initial Cloud Data & Start Background Sync Poller
+        syncFromCloud();
+        setInterval(syncFromCloud, 3000); // Checks for changes every 3 seconds!
 
-        function connectToLiveSyncGroup(syncId) {
-            currentSyncId = syncId.trim().toUpperCase() || "MY-HOUSES-1";
-            
-            // Unsubscribe previous listener if any
-            db.ref('sync_groups/' + currentSyncId).off();
-
-            // Subscribe to live Realtime updates
-            db.ref('sync_groups/' + currentSyncId).on('value', (snapshot) => {
-                const data = snapshot.val();
-                favorites = data ? Object.values(data) : [];
-                renderFavorites();
-            });
-        }
-
+        // Change Sync ID Group
         function changeSyncGroup(newSyncId) {
             if (!newSyncId.trim()) return;
-            connectToLiveSyncGroup(newSyncId);
+            currentSyncId = newSyncId.trim().toUpperCase();
+            document.getElementById('sync-id-input').value = currentSyncId;
             window.location.hash = `sync=${currentSyncId}`;
-            alert(`Connected to Live Sync Group: "${currentSyncId}"`);
+            syncFromCloud();
+            alert(`Connected to Sync Group: "${currentSyncId}"`);
         }
 
-        function pushToCloud() {
-            // Save favorites array to Firebase Cloud
-            db.ref('sync_groups/' + currentSyncId).set(favorites);
+        // Push Favorites to Cloud Storage
+        async function pushToCloud() {
+            try {
+                document.getElementById('status-indicator').innerText = '⏳ Syncing...';
+                await fetch(`https://kvdb.io/${CLOUD_BUCKET}/${currentSyncId}`, {
+                    method: 'POST',
+                    body: JSON.stringify(favorites)
+                });
+                document.getElementById('status-indicator').innerText = '🟢 Cloud Sync Active';
+            } catch (err) {
+                console.error("Cloud Push Error:", err);
+            }
+        }
+
+        // Fetch Favorites from Cloud Storage
+        async function syncFromCloud() {
+            try {
+                const res = await fetch(`https://kvdb.io/${CLOUD_BUCKET}/${currentSyncId}`);
+                if (res.ok) {
+                    const cloudData = await res.json();
+                    if (Array.isArray(cloudData)) {
+                        // Only update if cloud data has changed
+                        if (JSON.stringify(cloudData) !== JSON.stringify(favorites)) {
+                            favorites = cloudData;
+                            renderFavorites();
+                        }
+                    }
+                }
+            } catch (err) {
+                // Key doesn't exist yet in cloud
+            }
         }
 
         // Switch Tabs
         function switchTab(tabName) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-
-            if (tabName === 'search') {
-                document.querySelectorAll('.tab-btn')[0].classList.add('active');
-                document.getElementById('tab-search').classList.add('active');
-            } else {
-                document.querySelectorAll('.tab-btn')[1].classList.add('active');
-                document.getElementById('tab-favorites').classList.add('active');
-            }
-        }
-
-        // Search Location (Restricted to Malaysia)
-        async function searchLocation() {
-            const query = document.getElementById('address-input').value.trim();
-            const resultsList = document.getElementById('results-list');
-            resultsList.innerHTML = '';
-
-            if (!query) return;
-
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=my&limit=5`;
-
-            try {
-                const response = await fetch(url);
-                const data = await response.json();
-
-                if (data.length === 0) {
-                    resultsList.innerHTML = '<li style="color:red;">No location found in Malaysia.</li>';
-                    return;
-                }
-
-                data.forEach(item => {
-                    const li = document.createElement('li');
-                    li.innerHTML = `<span class="fav-desc">${item.display_name}</span>`;
-                    li.onclick = () => selectLocation(item.lat, item.lon, item.display_name);
-                    resultsList.appendChild(li);
-                });
-            } catch (error) {
-                alert("Failed to search location.");
-            }
-        }
-
-        document.getElementById('address-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') searchLocation();
-        });
-
-        // Select Location
-        function selectLocation(lat, lon, displayName, customTitle = null) {
-            const latitude = parseFloat(lat);
-            const longitude = parseFloat(lon);
-
-            activeSelectedData = { lat: latitude, lon: longitude, address: displayName };
-
-            map.flyTo([latitude, longitude], 16);
-
-            if (searchMarker) {
-                searchMarker.setLatLng([latitude, longitude]);
-            } else {
-                searchMarker = L.marker([latitude, longitude]).addTo(map);
-            }
-
-            document.getElementById('loc-title').innerText = customTitle ? `📍 ${customTitle}` : 'Selected Location';
-            document.getElementById('loc-address').innerText = displayName;
-            document.getElementById('info-panel').style.display = 'block';
-
-            document.getElementById('btn-gmaps').href = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-            document.getElementById('btn-waze').href = `https://waze.com/ul?ll=${latitude},${longitude}&navigate=yes`;
-
-            document.getElementById('results-list').innerHTML = '';
-        }
-
-        // Map Click
-        map.on('click', async function(e) {
-            const { lat, lng } = e.latlng;
-            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
-            try {
-                const response = await fetch(url);
-                const data = await response.json();
-                const address = data.display_name || `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`;
-                selectLocation(lat, lng, address);
-            } catch (err) {
-                selectLocation(lat, lng, `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`);
-            }
-        });
-
-        // Save Current Location -> Push to Cloud Sync
-        function saveCurrentToFavorites() {
-            if (!activeSelectedData) return;
-
-            const name = prompt("Enter a label for this location:\n(e.g., My House, Mom's House, Sabah Office)", "My Saved Place");
-            if (!name || name.trim() === '') return;
-
-            const newFav = {
-                id: Date.now(),
-                name: name.trim(),
-                lat: activeSelectedData.lat,
-                lon: activeSelectedData.lon,
-                address: activeSelectedData.address
-            };
-
-            favorites.push(newFav);
-            pushToCloud(); // Syncs to all connected devices in real time!
-            alert(`Saved "${name}" and synced to all devices! ⭐`);
-        }
-
-        // Render Favorites & Stars on Map
-        function renderFavorites() {
-            const list = document.getElementById('favorites-list');
-            document.getElementById('fav-count').innerText = favorites.length;
-            list.innerHTML = '';
-
-            favoriteMarkersOnMap.forEach(marker => map.removeLayer(marker));
-            favoriteMarkersOnMap = [];
-
-            if (favorites.length === 0) {
-                list.innerHTML = '<li style="color:#888; font-size: 0.8rem; text-align:center;">No synced places yet.<br>Select a location and save it!</li>';
-                return;
-            }
-
-            favorites.forEach(fav => {
-                const li = document.createElement('li');
-                li.innerHTML = `
-                    <div class="fav-info" onclick="selectLocation(${fav.lat}, ${fav.lon}, '${escapeQuotes(fav.address)}', '${escapeQuotes(fav.name)}')">
-                        <span class="fav-title">⭐ ${fav.name}</span>
-                        <span class="fav-desc">${fav.address}</span>
-                    </div>
-                    <button class="btn-delete" title="Delete Favorite" onclick="deleteFavorite(${fav.id}, event)">🗑️</button>
-                `;
-                list.appendChild(li);
-
-                const starMarker = L.marker([fav.lat, fav.lon], { icon: starIcon }).addTo(map);
-                starMarker.on('click', () => {
-                    selectLocation(fav.lat, fav.lon, fav.address, fav.name);
-                });
-
-                favoriteMarkersOnMap.push(starMarker);
-            });
-        }
-
-        // Share Link with Sync Code embedded
-        function shareLiveSyncLink() {
-            const shareableUrl = `${window.location.origin}${window.location.pathname}#sync=${currentSyncId}`;
-
-            navigator.clipboard.writeText(shareableUrl).then(() => {
-                alert(`🔗 Live Sync Link copied to clipboard!\n\nSync ID: "${currentSyncId}"\n\nAnyone opening this link stays synchronized with you in real-time!`);
-            }).catch(() => {
-                prompt("Copy this Live Sync Link:", shareableUrl);
-            });
-        }
-
-        // Delete Favorite -> Push update to Cloud
-        function deleteFavorite(id, event) {
-            event.stopPropagation();
-            if (confirm("Delete this star location?")) {
-                favorites = favorites.filter(fav => fav.id !== id);
-                pushToCloud(); // Syncs deletion to all devices in real time!
-            }
-        }
-
-        function escapeQuotes(str) {
-            return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
-        }
-    </script>
-</body>
-</html>
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remov

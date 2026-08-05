@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Malaysia House Locator (Peninsular, Sabah & Sarawak)</title>
+    <title>Malaysia House Locator & Favorite Places</title>
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -37,24 +37,61 @@
         }
 
         header h1 {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 600;
         }
 
-        /* Floating Search Panel */
-        #search-panel {
+        /* Floating Sidebar / Panel */
+        #main-panel {
             position: absolute;
-            top: 70px;
+            top: 65px;
             left: 20px;
             z-index: 1000;
             background: white;
             padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-            width: 320px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            width: 330px;
             max-width: 90vw;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
         }
 
+        /* Tabs UI */
+        .tab-buttons {
+            display: flex;
+            border-bottom: 2px solid #eee;
+            margin-bottom: 12px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 8px 0;
+            background: none;
+            border: none;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #666;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+
+        .tab-btn.active {
+            color: #003366;
+            border-bottom-color: #003366;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Search Section */
         .search-box {
             display: flex;
             gap: 6px;
@@ -73,7 +110,7 @@
             border-color: #003366;
         }
 
-        button.search-btn {
+        button.btn-primary {
             background: #003366;
             color: white;
             border: none;
@@ -81,36 +118,75 @@
             border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
 
-        button.search-btn:hover {
+        button.btn-primary:hover {
             background: #002244;
         }
 
-        /* Search Results List */
-        #results-list {
+        /* Search Results & Favorites List */
+        .list-container {
             list-style: none;
-            max-height: 160px;
+            max-height: 180px;
             overflow-y: auto;
             margin-top: 8px;
             border-top: 1px solid #eee;
         }
 
-        #results-list li {
-            padding: 8px 5px;
+        .list-container li {
+            padding: 10px;
             border-bottom: 1px solid #f0f0f0;
             cursor: pointer;
             font-size: 0.85rem;
             color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        #results-list li:hover {
+        .list-container li:hover {
             background-color: #f0f7ff;
-            color: #003366;
         }
 
-        /* Selected Location Details */
+        .fav-info {
+            flex: 1;
+            overflow: hidden;
+            padding-right: 8px;
+        }
+
+        .fav-title {
+            font-weight: bold;
+            color: #003366;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .fav-desc {
+            font-size: 0.75rem;
+            color: #666;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+
+        .btn-delete {
+            background: none;
+            border: none;
+            color: #ff4d4d;
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .btn-delete:hover {
+            color: #cc0000;
+        }
+
+        /* Selected Location Action Panel */
         #info-panel {
             display: none;
             margin-top: 12px;
@@ -121,14 +197,31 @@
         #info-panel h3 {
             font-size: 0.95rem;
             color: #003366;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
         }
 
         #info-panel p {
-            font-size: 0.82rem;
+            font-size: 0.8rem;
             color: #555;
             margin-bottom: 10px;
             line-height: 1.3;
+        }
+
+        .btn-save-fav {
+            width: 100%;
+            background: #ff9900;
+            color: white;
+            border: none;
+            padding: 8px 0;
+            border-radius: 5px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 8px;
+        }
+
+        .btn-save-fav:hover {
+            background: #e68a00;
         }
 
         .nav-buttons {
@@ -149,7 +242,6 @@
 
         .btn-waze { background-color: #33ccff; color: #000; }
         .btn-gmaps { background-color: #4285F4; }
-        .nav-btn:hover { opacity: 0.9; }
 
         /* Map styling */
         #map {
@@ -158,10 +250,10 @@
             height: 100%;
         }
 
-        /* Mobile Adjustments */
+        /* Mobile View Fixes */
         @media (max-width: 480px) {
-            #search-panel {
-                top: 65px;
+            #main-panel {
+                top: 60px;
                 left: 10px;
                 right: 10px;
                 width: auto;
@@ -172,22 +264,38 @@
 <body>
 
     <header>
-        <h1>🏠 Malaysia Location Finder</h1>
-        <span style="font-size: 0.8rem; opacity: 0.8;">Peninsular • Sabah • Sarawak</span>
+        <h1>🏠 Malaysia House Locator</h1>
+        <span style="font-size: 0.75rem; opacity: 0.8;">Peninsular • Sabah • Sarawak</span>
     </header>
 
-    <div id="search-panel">
-        <div class="search-box">
-            <input type="text" id="address-input" placeholder="Enter house address, area, or postcode..." />
-            <button class="search-btn" onclick="searchLocation()">Search</button>
+    <div id="main-panel">
+        <!-- Tab Controls -->
+        <div class="tab-buttons">
+            <button class="tab-btn active" onclick="switchTab('search')">🔍 Search</button>
+            <button class="tab-btn" onclick="switchTab('favorites')">⭐ Favorites (<span id="fav-count">0</span>)</button>
         </div>
-        
-        <ul id="results-list"></ul>
 
+        <!-- Tab 1: Search -->
+        <div id="tab-search" class="tab-content active">
+            <div class="search-box">
+                <input type="text" id="address-input" placeholder="Search address, city, postcode..." />
+                <button class="btn-primary" onclick="searchLocation()">Search</button>
+            </div>
+            <ul id="results-list" class="list-container"></ul>
+        </div>
+
+        <!-- Tab 2: Favorites Library -->
+        <div id="tab-favorites" class="tab-content">
+            <ul id="favorites-list" class="list-container" style="max-height: 250px;"></ul>
+        </div>
+
+        <!-- Selected Location & Nav Actions -->
         <div id="info-panel">
             <h3 id="loc-title">Selected Location</h3>
             <p id="loc-address">Address details will appear here.</p>
             
+            <button class="btn-save-fav" onclick="saveCurrentToFavorites()">⭐ Save to Favorite Places</button>
+
             <div class="nav-buttons">
                 <a id="btn-gmaps" class="nav-btn btn-gmaps" target="_blank">Google Maps</a>
                 <a id="btn-waze" class="nav-btn btn-waze" target="_blank">Waze</a>
@@ -200,19 +308,39 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // 1. Initialize map centered over Malaysia (covering Peninsular, Sabah, & Sarawak)
-        // Center: Lat 4.2105, Lng 108.9758 (Center of South China Sea between East & West Malaysia)
+        // 1. Initialize map over Malaysia
         const map = L.map('map').setView([4.2105, 108.9758], 6);
 
-        // 2. Add OpenStreetMap Tile Layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
-            attribution: '© OpenStreetMap contributors'
+            attribution: '© OpenStreetMap'
         }).addTo(map);
 
         let currentMarker = null;
+        let selectedData = null; // Stores currently active point info
 
-        // 3. Search Function using OpenStreetMap Nominatim API (Restricted to Malaysia)
+        // Load favorites from local storage
+        let favorites = JSON.parse(localStorage.getItem('my_malaysia_favs')) || [];
+
+        // On Load
+        renderFavorites();
+
+        // Switch Tabs (Search vs Favorites)
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            if (tabName === 'search') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('tab-search').classList.add('active');
+            } else {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('tab-favorites').classList.add('active');
+                renderFavorites();
+            }
+        }
+
+        // 2. Search Function (Restricted to Malaysia)
         async function searchLocation() {
             const query = document.getElementById('address-input').value.trim();
             const resultsList = document.getElementById('results-list');
@@ -220,7 +348,6 @@
 
             if (!query) return;
 
-            // Notice 'countrycodes=my' -> strictly restricts search results to Malaysia
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=my&limit=5`;
 
             try {
@@ -234,64 +361,116 @@
 
                 data.forEach(item => {
                     const li = document.createElement('li');
-                    li.innerText = item.display_name;
+                    li.innerHTML = `<span class="fav-desc">${item.display_name}</span>`;
                     li.onclick = () => selectLocation(item.lat, item.lon, item.display_name);
                     resultsList.appendChild(li);
                 });
             } catch (error) {
-                console.error("Error fetching location:", error);
-                alert("Failed to search. Please check your internet connection.");
+                alert("Failed to search location.");
             }
         }
 
-        // Enable pressing Enter in input field
-        document.getElementById('address-input').addEventListener('keypress', function (e) {
+        document.getElementById('address-input').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') searchLocation();
         });
 
-        // 4. Handle Location Selection
+        // 3. Select Location & Show Details
         function selectLocation(lat, lon, displayName) {
             const latitude = parseFloat(lat);
             const longitude = parseFloat(lon);
 
-            // Fly map to selected coordinates
+            selectedData = { lat: latitude, lon: longitude, address: displayName };
+
             map.flyTo([latitude, longitude], 16);
 
-            // Add or move marker
             if (currentMarker) {
                 currentMarker.setLatLng([latitude, longitude]);
             } else {
                 currentMarker = L.marker([latitude, longitude]).addTo(map);
             }
 
-            // Update details panel
             document.getElementById('loc-address').innerText = displayName;
             document.getElementById('info-panel').style.display = 'block';
 
-            // Generate direct Navigation links for Google Maps and Waze
+            // Set Navigation Links
             document.getElementById('btn-gmaps').href = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
             document.getElementById('btn-waze').href = `https://waze.com/ul?ll=${latitude},${longitude}&navigate=yes`;
 
-            // Clear search dropdown list after selection
             document.getElementById('results-list').innerHTML = '';
         }
 
-        // 5. Allow user to click ANYWHERE on the map to place a pin (Reverse Geocoding)
+        // 4. Click Map to drop pin anywhere in Sabah, Sarawak, or Peninsular
         map.on('click', async function(e) {
             const { lat, lng } = e.latlng;
-
-            // Fetch address from clicked coordinates
             const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
             try {
                 const response = await fetch(url);
                 const data = await response.json();
                 const address = data.display_name || `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`;
-                
                 selectLocation(lat, lng, address);
             } catch (err) {
                 selectLocation(lat, lng, `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`);
             }
         });
+
+        // 5. Save Current Location to Favorites Library
+        function saveCurrentToFavorites() {
+            if (!selectedData) return;
+
+            const name = prompt("Enter a label for this location:\n(e.g., My House, Mom's House, Sabah Site Office)", "My Saved Place");
+            if (!name || name.trim() === '') return;
+
+            const newFav = {
+                id: Date.now(),
+                name: name.trim(),
+                lat: selectedData.lat,
+                lon: selectedData.lon,
+                address: selectedData.address
+            };
+
+            favorites.push(newFav);
+            localStorage.setItem('my_malaysia_favs', JSON.stringify(favorites));
+            renderFavorites();
+            alert(`Saved "${name}" to your Favorites!`);
+        }
+
+        // 6. Render Favorites List
+        function renderFavorites() {
+            const list = document.getElementById('favorites-list');
+            document.getElementById('fav-count').innerText = favorites.length;
+            list.innerHTML = '';
+
+            if (favorites.length === 0) {
+                list.innerHTML = '<li style="color:#888; font-size: 0.8rem; text-align:center;">No saved places yet.<br>Select a place and click "Save to Favorite Places".</li>';
+                return;
+            }
+
+            favorites.forEach(fav => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <div class="fav-info" onclick="selectLocation(${fav.lat}, ${fav.lon}, '${escapeQuotes(fav.address)}')">
+                        <span class="fav-title">📍 ${fav.name}</span>
+                        <span class="fav-desc">${fav.address}</span>
+                    </div>
+                    <button class="btn-delete" title="Delete Favorite" onclick="deleteFavorite(${fav.id}, event)">🗑️</button>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        // 7. Delete Favorite
+        function deleteFavorite(id, event) {
+            event.stopPropagation(); // Prevents triggering selection on click
+            if (confirm("Delete this saved location?")) {
+                favorites = favorites.filter(fav => fav.id !== id);
+                localStorage.setItem('my_malaysia_favs', JSON.stringify(favorites));
+                renderFavorites();
+            }
+        }
+
+        function escapeQuotes(str) {
+            return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
     </script>
 </body>
 </html>

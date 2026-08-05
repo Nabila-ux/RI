@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Malaysia House Locator & Favorite Places</title>
+    <title>Malaysia House Locator & Shared Favorite Places</title>
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -186,6 +186,24 @@
             color: #cc0000;
         }
 
+        /* Share Button */
+        .btn-share {
+            width: 100%;
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 9px 0;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 8px;
+        }
+
+        .btn-share:hover {
+            background: #218838;
+        }
+
         /* Selected Location Action Panel */
         #info-panel {
             display: none;
@@ -295,7 +313,8 @@
 
         <!-- Tab 2: Favorites Library -->
         <div id="tab-favorites" class="tab-content">
-            <ul id="favorites-list" class="list-container" style="max-height: 250px;"></ul>
+            <button class="btn-share" onclick="shareFavoriteLocations()">🔗 Share All Places (Copy Link)</button>
+            <ul id="favorites-list" class="list-container" style="max-height: 200px;"></ul>
         </div>
 
         <!-- Selected Location & Nav Actions -->
@@ -327,7 +346,7 @@
 
         let searchMarker = null;
         let activeSelectedData = null; 
-        let favoriteMarkersOnMap = []; // Stores map markers for favorites
+        let favoriteMarkersOnMap = [];
 
         // Custom Star Icon for Map
         const starIcon = L.divIcon({
@@ -340,7 +359,10 @@
         // Load favorites from local storage
         let favorites = JSON.parse(localStorage.getItem('my_malaysia_favs')) || [];
 
-        // Render Favorites list & Star Markers on map initial load
+        // Check if user opened a Shared Link with encoded locations in URL
+        checkUrlForSharedPlaces();
+
+        // Render Favorites
         renderFavorites();
 
         // Switch Tabs (Search vs Favorites)
@@ -400,7 +422,6 @@
 
             map.flyTo([latitude, longitude], 16);
 
-            // Set search pin
             if (searchMarker) {
                 searchMarker.setLatLng([latitude, longitude]);
             } else {
@@ -411,14 +432,13 @@
             document.getElementById('loc-address').innerText = displayName;
             document.getElementById('info-panel').style.display = 'block';
 
-            // Set Navigation Links
             document.getElementById('btn-gmaps').href = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
             document.getElementById('btn-waze').href = `https://waze.com/ul?ll=${latitude},${longitude}&navigate=yes`;
 
             document.getElementById('results-list').innerHTML = '';
         }
 
-        // 4. Click Map anywhere to inspect place
+        // 4. Click Map anywhere
         map.on('click', async function(e) {
             const { lat, lng } = e.latlng;
             const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
@@ -432,11 +452,11 @@
             }
         });
 
-        // 5. Save Current Location to Favorites
+        // 5. Save Location
         function saveCurrentToFavorites() {
             if (!activeSelectedData) return;
 
-            const name = prompt("Enter a label for this location:\n(e.g., My House, Mom's House, Kuching Branch)", "My Saved Place");
+            const name = prompt("Enter a label for this location:\n(e.g., My House, Mom's House, Kuching Office)", "My Saved Place");
             if (!name || name.trim() === '') return;
 
             const newFav = {
@@ -450,17 +470,16 @@
             favorites.push(newFav);
             localStorage.setItem('my_malaysia_favs', JSON.stringify(favorites));
             
-            renderFavorites(); // Re-render list AND star markers on map
+            renderFavorites();
             alert(`Saved "${name}" as a Star location! ⭐`);
         }
 
-        // 6. Render Favorites List & Display STAR Markers on Map
+        // 6. Render Favorites & Star Markers
         function renderFavorites() {
             const list = document.getElementById('favorites-list');
             document.getElementById('fav-count').innerText = favorites.length;
             list.innerHTML = '';
 
-            // Clear old star markers from map
             favoriteMarkersOnMap.forEach(marker => map.removeLayer(marker));
             favoriteMarkersOnMap = [];
 
@@ -470,7 +489,6 @@
             }
 
             favorites.forEach(fav => {
-                // A. Add item to Favorites Tab List
                 const li = document.createElement('li');
                 li.innerHTML = `
                     <div class="fav-info" onclick="selectLocation(${fav.lat}, ${fav.lon}, '${escapeQuotes(fav.address)}', '${escapeQuotes(fav.name)}')">
@@ -481,10 +499,7 @@
                 `;
                 list.appendChild(li);
 
-                // B. Add STAR Marker (⭐) directly onto the Leaflet Map
                 const starMarker = L.marker([fav.lat, fav.lon], { icon: starIcon }).addTo(map);
-                
-                // Clicking the Star Marker opens its info
                 starMarker.on('click', () => {
                     selectLocation(fav.lat, fav.lon, fav.address, fav.name);
                 });
@@ -493,7 +508,58 @@
             });
         }
 
-        // 7. Delete Favorite
+        // 7. Share Favorites via Link
+        function shareFavoriteLocations() {
+            if (favorites.length === 0) {
+                alert("Please save at least one location before sharing!");
+                return;
+            }
+
+            // Encode favorite items into a Base64 string in URL hash
+            const jsonString = JSON.stringify(favorites);
+            const encodedData = btoa(encodeURIComponent(jsonString));
+            const shareableUrl = `${window.location.origin}${window.location.pathname}#data=${encodedData}`;
+
+            // Copy to Clipboard
+            navigator.clipboard.writeText(shareableUrl).then(() => {
+                alert("🔗 Shareable link copied to clipboard!\n\nAnyone who opens this link will see your saved locations!");
+            }).catch(() => {
+                prompt("Copy this URL to share your saved places:", shareableUrl);
+            });
+        }
+
+        // 8. Import Shared Favorites from URL
+        function checkUrlForSharedPlaces() {
+            if (window.location.hash.startsWith('#data=')) {
+                try {
+                    const encodedData = window.location.hash.replace('#data=', '');
+                    const jsonString = decodeURIComponent(atob(encodedData));
+                    const sharedFavs = JSON.parse(jsonString);
+
+                    if (Array.isArray(sharedFavs) && sharedFavs.length > 0) {
+                        let importedCount = 0;
+                        sharedFavs.forEach(sharedItem => {
+                            // Avoid duplicates
+                            const exists = favorites.some(f => f.lat === sharedItem.lat && f.lon === sharedItem.lon);
+                            if (!exists) {
+                                favorites.push(sharedItem);
+                                importedCount++;
+                            }
+                        });
+
+                        localStorage.setItem('my_malaysia_favs', JSON.stringify(favorites));
+                        alert(`🎉 Successfully imported ${importedCount} shared favorite place(s)!`);
+                        
+                        // Clean up URL without reloading page
+                        history.replaceState(null, null, ' ');
+                    }
+                } catch (e) {
+                    console.error("Failed to parse shared URL locations", e);
+                }
+            }
+        }
+
+        // Delete Favorite
         function deleteFavorite(id, event) {
             event.stopPropagation();
             if (confirm("Delete this star location?")) {

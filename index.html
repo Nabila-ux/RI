@@ -243,6 +243,15 @@
         .btn-waze { background-color: #33ccff; color: #000; }
         .btn-gmaps { background-color: #4285F4; }
 
+        /* Custom Star Map Marker Style */
+        .star-marker-icon {
+            font-size: 26px;
+            line-height: 26px;
+            text-align: center;
+            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.4));
+            cursor: pointer;
+        }
+
         /* Map styling */
         #map {
             flex: 1;
@@ -272,7 +281,7 @@
         <!-- Tab Controls -->
         <div class="tab-buttons">
             <button class="tab-btn active" onclick="switchTab('search')">🔍 Search</button>
-            <button class="tab-btn" onclick="switchTab('favorites')">⭐ Favorites (<span id="fav-count">0</span>)</button>
+            <button class="tab-btn" onclick="switchTab('favorites')">⭐ Saved Stars (<span id="fav-count">0</span>)</button>
         </div>
 
         <!-- Tab 1: Search -->
@@ -294,7 +303,7 @@
             <h3 id="loc-title">Selected Location</h3>
             <p id="loc-address">Address details will appear here.</p>
             
-            <button class="btn-save-fav" onclick="saveCurrentToFavorites()">⭐ Save to Favorite Places</button>
+            <button class="btn-save-fav" onclick="saveCurrentToFavorites()">⭐ Save as Star Favorite Location</button>
 
             <div class="nav-buttons">
                 <a id="btn-gmaps" class="nav-btn btn-gmaps" target="_blank">Google Maps</a>
@@ -316,13 +325,22 @@
             attribution: '© OpenStreetMap'
         }).addTo(map);
 
-        let currentMarker = null;
-        let selectedData = null; // Stores currently active point info
+        let searchMarker = null;
+        let activeSelectedData = null; 
+        let favoriteMarkersOnMap = []; // Stores map markers for favorites
+
+        // Custom Star Icon for Map
+        const starIcon = L.divIcon({
+            className: 'star-marker-icon',
+            html: '⭐',
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+        });
 
         // Load favorites from local storage
         let favorites = JSON.parse(localStorage.getItem('my_malaysia_favs')) || [];
 
-        // On Load
+        // Render Favorites list & Star Markers on map initial load
         renderFavorites();
 
         // Switch Tabs (Search vs Favorites)
@@ -336,7 +354,6 @@
             } else {
                 document.querySelectorAll('.tab-btn')[1].classList.add('active');
                 document.getElementById('tab-favorites').classList.add('active');
-                renderFavorites();
             }
         }
 
@@ -375,20 +392,22 @@
         });
 
         // 3. Select Location & Show Details
-        function selectLocation(lat, lon, displayName) {
+        function selectLocation(lat, lon, displayName, customTitle = null) {
             const latitude = parseFloat(lat);
             const longitude = parseFloat(lon);
 
-            selectedData = { lat: latitude, lon: longitude, address: displayName };
+            activeSelectedData = { lat: latitude, lon: longitude, address: displayName };
 
             map.flyTo([latitude, longitude], 16);
 
-            if (currentMarker) {
-                currentMarker.setLatLng([latitude, longitude]);
+            // Set search pin
+            if (searchMarker) {
+                searchMarker.setLatLng([latitude, longitude]);
             } else {
-                currentMarker = L.marker([latitude, longitude]).addTo(map);
+                searchMarker = L.marker([latitude, longitude]).addTo(map);
             }
 
+            document.getElementById('loc-title').innerText = customTitle ? `📍 ${customTitle}` : 'Selected Location';
             document.getElementById('loc-address').innerText = displayName;
             document.getElementById('info-panel').style.display = 'block';
 
@@ -399,7 +418,7 @@
             document.getElementById('results-list').innerHTML = '';
         }
 
-        // 4. Click Map to drop pin anywhere in Sabah, Sarawak, or Peninsular
+        // 4. Click Map anywhere to inspect place
         map.on('click', async function(e) {
             const { lat, lng } = e.latlng;
             const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
@@ -413,55 +432,71 @@
             }
         });
 
-        // 5. Save Current Location to Favorites Library
+        // 5. Save Current Location to Favorites
         function saveCurrentToFavorites() {
-            if (!selectedData) return;
+            if (!activeSelectedData) return;
 
-            const name = prompt("Enter a label for this location:\n(e.g., My House, Mom's House, Sabah Site Office)", "My Saved Place");
+            const name = prompt("Enter a label for this location:\n(e.g., My House, Mom's House, Kuching Branch)", "My Saved Place");
             if (!name || name.trim() === '') return;
 
             const newFav = {
                 id: Date.now(),
                 name: name.trim(),
-                lat: selectedData.lat,
-                lon: selectedData.lon,
-                address: selectedData.address
+                lat: activeSelectedData.lat,
+                lon: activeSelectedData.lon,
+                address: activeSelectedData.address
             };
 
             favorites.push(newFav);
             localStorage.setItem('my_malaysia_favs', JSON.stringify(favorites));
-            renderFavorites();
-            alert(`Saved "${name}" to your Favorites!`);
+            
+            renderFavorites(); // Re-render list AND star markers on map
+            alert(`Saved "${name}" as a Star location! ⭐`);
         }
 
-        // 6. Render Favorites List
+        // 6. Render Favorites List & Display STAR Markers on Map
         function renderFavorites() {
             const list = document.getElementById('favorites-list');
             document.getElementById('fav-count').innerText = favorites.length;
             list.innerHTML = '';
 
+            // Clear old star markers from map
+            favoriteMarkersOnMap.forEach(marker => map.removeLayer(marker));
+            favoriteMarkersOnMap = [];
+
             if (favorites.length === 0) {
-                list.innerHTML = '<li style="color:#888; font-size: 0.8rem; text-align:center;">No saved places yet.<br>Select a place and click "Save to Favorite Places".</li>';
+                list.innerHTML = '<li style="color:#888; font-size: 0.8rem; text-align:center;">No saved places yet.<br>Select a place and click "Save as Star Favorite Location".</li>';
                 return;
             }
 
             favorites.forEach(fav => {
+                // A. Add item to Favorites Tab List
                 const li = document.createElement('li');
                 li.innerHTML = `
-                    <div class="fav-info" onclick="selectLocation(${fav.lat}, ${fav.lon}, '${escapeQuotes(fav.address)}')">
-                        <span class="fav-title">📍 ${fav.name}</span>
+                    <div class="fav-info" onclick="selectLocation(${fav.lat}, ${fav.lon}, '${escapeQuotes(fav.address)}', '${escapeQuotes(fav.name)}')">
+                        <span class="fav-title">⭐ ${fav.name}</span>
                         <span class="fav-desc">${fav.address}</span>
                     </div>
                     <button class="btn-delete" title="Delete Favorite" onclick="deleteFavorite(${fav.id}, event)">🗑️</button>
                 `;
                 list.appendChild(li);
+
+                // B. Add STAR Marker (⭐) directly onto the Leaflet Map
+                const starMarker = L.marker([fav.lat, fav.lon], { icon: starIcon }).addTo(map);
+                
+                // Clicking the Star Marker opens its info
+                starMarker.on('click', () => {
+                    selectLocation(fav.lat, fav.lon, fav.address, fav.name);
+                });
+
+                favoriteMarkersOnMap.push(starMarker);
             });
         }
 
         // 7. Delete Favorite
         function deleteFavorite(id, event) {
-            event.stopPropagation(); // Prevents triggering selection on click
-            if (confirm("Delete this saved location?")) {
+            event.stopPropagation();
+            if (confirm("Delete this star location?")) {
                 favorites = favorites.filter(fav => fav.id !== id);
                 localStorage.setItem('my_malaysia_favs', JSON.stringify(favorites));
                 renderFavorites();

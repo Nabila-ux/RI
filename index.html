@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Malaysia House Locator & Shared Favorite Places</title>
+    <title>Malaysia House Locator - Live Real-Time Sync</title>
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -28,7 +28,7 @@
         header {
             background: #003366;
             color: white;
-            padding: 12px 20px;
+            padding: 10px 18px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -39,6 +39,18 @@
         header h1 {
             font-size: 1.1rem;
             font-weight: 600;
+        }
+
+        .sync-badge {
+            background: #28a745;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
 
         /* Floating Sidebar / Panel */
@@ -56,6 +68,35 @@
             max-height: 85vh;
             display: flex;
             flex-direction: column;
+        }
+
+        /* Sync ID Control Box */
+        .sync-box {
+            background: #f0f7ff;
+            border: 1px solid #cce5ff;
+            padding: 8px 10px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+
+        .sync-box label {
+            font-size: 0.75rem;
+            color: #003366;
+            font-weight: bold;
+        }
+
+        .sync-box input {
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid #99ccff;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
         }
 
         /* Tabs UI */
@@ -98,16 +139,11 @@
         }
 
         input[type="text"] {
-            flex: 1;
             padding: 9px 12px;
             border: 1px solid #ccc;
             border-radius: 6px;
             font-size: 0.9rem;
             outline: none;
-        }
-
-        input[type="text"]:focus {
-            border-color: #003366;
         }
 
         button.btn-primary {
@@ -119,10 +155,6 @@
             cursor: pointer;
             font-weight: 600;
             font-size: 0.85rem;
-        }
-
-        button.btn-primary:hover {
-            background: #002244;
         }
 
         /* Search Results & Favorites List */
@@ -182,11 +214,6 @@
             padding: 4px;
         }
 
-        .btn-delete:hover {
-            color: #cc0000;
-        }
-
-        /* Share Button */
         .btn-share {
             width: 100%;
             background: #28a745;
@@ -198,10 +225,6 @@
             font-weight: bold;
             cursor: pointer;
             margin-bottom: 8px;
-        }
-
-        .btn-share:hover {
-            background: #218838;
         }
 
         /* Selected Location Action Panel */
@@ -238,10 +261,6 @@
             margin-bottom: 8px;
         }
 
-        .btn-save-fav:hover {
-            background: #e68a00;
-        }
-
         .nav-buttons {
             display: flex;
             gap: 8px;
@@ -261,7 +280,6 @@
         .btn-waze { background-color: #33ccff; color: #000; }
         .btn-gmaps { background-color: #4285F4; }
 
-        /* Custom Star Map Marker Style */
         .star-marker-icon {
             font-size: 26px;
             line-height: 26px;
@@ -270,14 +288,12 @@
             cursor: pointer;
         }
 
-        /* Map styling */
         #map {
             flex: 1;
             width: 100%;
             height: 100%;
         }
 
-        /* Mobile View Fixes */
         @media (max-width: 480px) {
             #main-panel {
                 top: 60px;
@@ -292,20 +308,27 @@
 
     <header>
         <h1>🏠 Malaysia House Locator</h1>
-        <span style="font-size: 0.75rem; opacity: 0.8;">Peninsular • Sabah • Sarawak</span>
+        <div class="sync-badge">🔴 Live Sync Active</div>
     </header>
 
     <div id="main-panel">
+        <!-- Live Sync Group Input -->
+        <div class="sync-box">
+            <label>Sync ID:</label>
+            <input type="text" id="sync-id-input" value="MY-HOUSES-1" onchange="changeSyncGroup(this.value)" />
+            <button class="btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="changeSyncGroup(document.getElementById('sync-id-input').value)">Join</button>
+        </div>
+
         <!-- Tab Controls -->
         <div class="tab-buttons">
             <button class="tab-btn active" onclick="switchTab('search')">🔍 Search</button>
-            <button class="tab-btn" onclick="switchTab('favorites')">⭐ Saved Stars (<span id="fav-count">0</span>)</button>
+            <button class="tab-btn" onclick="switchTab('favorites')">⭐ Live Stars (<span id="fav-count">0</span>)</button>
         </div>
 
         <!-- Tab 1: Search -->
         <div id="tab-search" class="tab-content active">
             <div class="search-box">
-                <input type="text" id="address-input" placeholder="Search address, city, postcode..." />
+                <input type="text" id="address-input" style="flex:1;" placeholder="Search address, city, postcode..." />
                 <button class="btn-primary" onclick="searchLocation()">Search</button>
             </div>
             <ul id="results-list" class="list-container"></ul>
@@ -313,7 +336,7 @@
 
         <!-- Tab 2: Favorites Library -->
         <div id="tab-favorites" class="tab-content">
-            <button class="btn-share" onclick="shareFavoriteLocations()">🔗 Share All Places (Copy Link)</button>
+            <button class="btn-share" onclick="shareLiveSyncLink()">🔗 Share Live Sync Link</button>
             <ul id="favorites-list" class="list-container" style="max-height: 200px;"></ul>
         </div>
 
@@ -322,7 +345,7 @@
             <h3 id="loc-title">Selected Location</h3>
             <p id="loc-address">Address details will appear here.</p>
             
-            <button class="btn-save-fav" onclick="saveCurrentToFavorites()">⭐ Save as Star Favorite Location</button>
+            <button class="btn-save-fav" onclick="saveCurrentToFavorites()">⭐ Save & Sync To Live Map</button>
 
             <div class="nav-buttons">
                 <a id="btn-gmaps" class="nav-btn btn-gmaps" target="_blank">Google Maps</a>
@@ -335,8 +358,20 @@
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Firebase Realtime Database SDK for Live Synchronization -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
     <script>
-        // 1. Initialize map over Malaysia
+        // 1. Initialize Firebase Cloud Database for Realtime Syncing
+        const firebaseConfig = {
+            databaseURL: "https://my-house-locator-default-rtdb.asia-southeast1.firebasedatabase.app/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // 2. Initialize Leaflet Map over Malaysia
         const map = L.map('map').setView([4.2105, 108.9758], 6);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -347,8 +382,9 @@
         let searchMarker = null;
         let activeSelectedData = null; 
         let favoriteMarkersOnMap = [];
+        let favorites = [];
+        let currentSyncId = "MY-HOUSES-1";
 
-        // Custom Star Icon for Map
         const starIcon = L.divIcon({
             className: 'star-marker-icon',
             html: '⭐',
@@ -356,16 +392,43 @@
             iconAnchor: [15, 15]
         });
 
-        // Load favorites from local storage
-        let favorites = JSON.parse(localStorage.getItem('my_malaysia_favs')) || [];
+        // 3. Connect to Sync ID from URL hash or default
+        const hashMatch = window.location.hash.match(/sync=([A-Za-z0-9_-]+)/);
+        if (hashMatch && hashMatch[1]) {
+            currentSyncId = hashMatch[1].toUpperCase();
+        }
+        document.getElementById('sync-id-input').value = currentSyncId;
 
-        // Check if user opened a Shared Link with encoded locations in URL
-        checkUrlForSharedPlaces();
+        // Listen for live updates from Cloud
+        connectToLiveSyncGroup(currentSyncId);
 
-        // Render Favorites
-        renderFavorites();
+        function connectToLiveSyncGroup(syncId) {
+            currentSyncId = syncId.trim().toUpperCase() || "MY-HOUSES-1";
+            
+            // Unsubscribe previous listener if any
+            db.ref('sync_groups/' + currentSyncId).off();
 
-        // Switch Tabs (Search vs Favorites)
+            // Subscribe to live Realtime updates
+            db.ref('sync_groups/' + currentSyncId).on('value', (snapshot) => {
+                const data = snapshot.val();
+                favorites = data ? Object.values(data) : [];
+                renderFavorites();
+            });
+        }
+
+        function changeSyncGroup(newSyncId) {
+            if (!newSyncId.trim()) return;
+            connectToLiveSyncGroup(newSyncId);
+            window.location.hash = `sync=${currentSyncId}`;
+            alert(`Connected to Live Sync Group: "${currentSyncId}"`);
+        }
+
+        function pushToCloud() {
+            // Save favorites array to Firebase Cloud
+            db.ref('sync_groups/' + currentSyncId).set(favorites);
+        }
+
+        // Switch Tabs
         function switchTab(tabName) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -379,7 +442,7 @@
             }
         }
 
-        // 2. Search Function (Restricted to Malaysia)
+        // Search Location (Restricted to Malaysia)
         async function searchLocation() {
             const query = document.getElementById('address-input').value.trim();
             const resultsList = document.getElementById('results-list');
@@ -413,7 +476,7 @@
             if (e.key === 'Enter') searchLocation();
         });
 
-        // 3. Select Location & Show Details
+        // Select Location
         function selectLocation(lat, lon, displayName, customTitle = null) {
             const latitude = parseFloat(lat);
             const longitude = parseFloat(lon);
@@ -438,7 +501,7 @@
             document.getElementById('results-list').innerHTML = '';
         }
 
-        // 4. Click Map anywhere
+        // Map Click
         map.on('click', async function(e) {
             const { lat, lng } = e.latlng;
             const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
@@ -452,11 +515,11 @@
             }
         });
 
-        // 5. Save Location
+        // Save Current Location -> Push to Cloud Sync
         function saveCurrentToFavorites() {
             if (!activeSelectedData) return;
 
-            const name = prompt("Enter a label for this location:\n(e.g., My House, Mom's House, Kuching Office)", "My Saved Place");
+            const name = prompt("Enter a label for this location:\n(e.g., My House, Mom's House, Sabah Office)", "My Saved Place");
             if (!name || name.trim() === '') return;
 
             const newFav = {
@@ -468,13 +531,11 @@
             };
 
             favorites.push(newFav);
-            localStorage.setItem('my_malaysia_favs', JSON.stringify(favorites));
-            
-            renderFavorites();
-            alert(`Saved "${name}" as a Star location! ⭐`);
+            pushToCloud(); // Syncs to all connected devices in real time!
+            alert(`Saved "${name}" and synced to all devices! ⭐`);
         }
 
-        // 6. Render Favorites & Star Markers
+        // Render Favorites & Stars on Map
         function renderFavorites() {
             const list = document.getElementById('favorites-list');
             document.getElementById('fav-count').innerText = favorites.length;
@@ -484,7 +545,7 @@
             favoriteMarkersOnMap = [];
 
             if (favorites.length === 0) {
-                list.innerHTML = '<li style="color:#888; font-size: 0.8rem; text-align:center;">No saved places yet.<br>Select a place and click "Save as Star Favorite Location".</li>';
+                list.innerHTML = '<li style="color:#888; font-size: 0.8rem; text-align:center;">No synced places yet.<br>Select a location and save it!</li>';
                 return;
             }
 
@@ -508,64 +569,23 @@
             });
         }
 
-        // 7. Share Favorites via Link
-        function shareFavoriteLocations() {
-            if (favorites.length === 0) {
-                alert("Please save at least one location before sharing!");
-                return;
-            }
+        // Share Link with Sync Code embedded
+        function shareLiveSyncLink() {
+            const shareableUrl = `${window.location.origin}${window.location.pathname}#sync=${currentSyncId}`;
 
-            // Encode favorite items into a Base64 string in URL hash
-            const jsonString = JSON.stringify(favorites);
-            const encodedData = btoa(encodeURIComponent(jsonString));
-            const shareableUrl = `${window.location.origin}${window.location.pathname}#data=${encodedData}`;
-
-            // Copy to Clipboard
             navigator.clipboard.writeText(shareableUrl).then(() => {
-                alert("🔗 Shareable link copied to clipboard!\n\nAnyone who opens this link will see your saved locations!");
+                alert(`🔗 Live Sync Link copied to clipboard!\n\nSync ID: "${currentSyncId}"\n\nAnyone opening this link stays synchronized with you in real-time!`);
             }).catch(() => {
-                prompt("Copy this URL to share your saved places:", shareableUrl);
+                prompt("Copy this Live Sync Link:", shareableUrl);
             });
         }
 
-        // 8. Import Shared Favorites from URL
-        function checkUrlForSharedPlaces() {
-            if (window.location.hash.startsWith('#data=')) {
-                try {
-                    const encodedData = window.location.hash.replace('#data=', '');
-                    const jsonString = decodeURIComponent(atob(encodedData));
-                    const sharedFavs = JSON.parse(jsonString);
-
-                    if (Array.isArray(sharedFavs) && sharedFavs.length > 0) {
-                        let importedCount = 0;
-                        sharedFavs.forEach(sharedItem => {
-                            // Avoid duplicates
-                            const exists = favorites.some(f => f.lat === sharedItem.lat && f.lon === sharedItem.lon);
-                            if (!exists) {
-                                favorites.push(sharedItem);
-                                importedCount++;
-                            }
-                        });
-
-                        localStorage.setItem('my_malaysia_favs', JSON.stringify(favorites));
-                        alert(`🎉 Successfully imported ${importedCount} shared favorite place(s)!`);
-                        
-                        // Clean up URL without reloading page
-                        history.replaceState(null, null, ' ');
-                    }
-                } catch (e) {
-                    console.error("Failed to parse shared URL locations", e);
-                }
-            }
-        }
-
-        // Delete Favorite
+        // Delete Favorite -> Push update to Cloud
         function deleteFavorite(id, event) {
             event.stopPropagation();
             if (confirm("Delete this star location?")) {
                 favorites = favorites.filter(fav => fav.id !== id);
-                localStorage.setItem('my_malaysia_favs', JSON.stringify(favorites));
-                renderFavorites();
+                pushToCloud(); // Syncs deletion to all devices in real time!
             }
         }
 

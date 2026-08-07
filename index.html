@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Malaysia House Locator - Live Real-Time Sync</title>
+    <title>Malaysia House Locator - Instant WebSockets Sync</title>
 
-    <!-- Leaflet CSS -->
+    <!-- Leaflet Map CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
     <style>
@@ -37,43 +37,48 @@
         }
 
         header h1 {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             font-weight: 600;
         }
 
         .sync-badge {
-            background: #28a745;
+            background: #e6a100;
             color: white;
             padding: 4px 10px;
             border-radius: 12px;
             font-size: 0.75rem;
             font-weight: bold;
+            transition: background 0.3s ease;
+        }
+
+        .sync-badge.online {
+            background: #28a745;
         }
 
         /* Floating Sidebar / Panel */
         #main-panel {
             position: absolute;
-            top: 65px;
-            left: 20px;
+            top: 60px;
+            left: 15px;
             z-index: 1000;
             background: white;
-            padding: 15px;
+            padding: 14px;
             border-radius: 10px;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
             width: 330px;
-            max-width: 90vw;
+            max-width: 92vw;
             max-height: 85vh;
             display: flex;
             flex-direction: column;
         }
 
-        /* Sync ID Control Box */
+        /* Sync Room Control Box */
         .sync-box {
             background: #f0f7ff;
             border: 1px solid #cce5ff;
             padding: 8px 10px;
             border-radius: 6px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -88,7 +93,7 @@
 
         .sync-box input {
             flex: 1;
-            padding: 4px 8px;
+            padding: 5px 8px;
             border: 1px solid #99ccff;
             border-radius: 4px;
             font-size: 0.8rem;
@@ -100,7 +105,7 @@
         .tab-buttons {
             display: flex;
             border-bottom: 2px solid #eee;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .tab-btn {
@@ -227,8 +232,8 @@
         /* Selected Location Action Panel */
         #info-panel {
             display: none;
-            margin-top: 12px;
-            padding-top: 12px;
+            margin-top: 10px;
+            padding-top: 10px;
             border-top: 1px solid #e0e0e0;
         }
 
@@ -293,9 +298,9 @@
 
         @media (max-width: 480px) {
             #main-panel {
-                top: 60px;
-                left: 10px;
-                right: 10px;
+                top: 55px;
+                left: 8px;
+                right: 8px;
                 width: auto;
             }
         }
@@ -305,15 +310,15 @@
 
     <header>
         <h1>🏠 Malaysia House Locator</h1>
-        <div class="sync-badge" id="status-indicator">🟢 Cloud Sync Active</div>
+        <div class="sync-badge" id="status-indicator">🟡 Connecting...</div>
     </header>
 
     <div id="main-panel">
-        <!-- Live Sync Group Input -->
+        <!-- Live Sync Room Box -->
         <div class="sync-box">
-            <label>Sync ID:</label>
-            <input type="text" id="sync-id-input" value="SABAH-KL-HOUSES" onchange="changeSyncGroup(this.value)" />
-            <button class="btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="changeSyncGroup(document.getElementById('sync-id-input').value)">Join</button>
+            <label>Sync Room:</label>
+            <input type="text" id="sync-id-input" value="SABAH-KL-ROOM1" />
+            <button class="btn-primary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="joinSyncRoom(document.getElementById('sync-id-input').value)">Join</button>
         </div>
 
         <!-- Tab Controls -->
@@ -333,8 +338,8 @@
 
         <!-- Tab 2: Favorites Library -->
         <div id="tab-favorites" class="tab-content">
-            <button class="btn-share" onclick="shareLiveSyncLink()">🔗 Copy Sync Link for Other Devices</button>
-            <ul id="favorites-list" class="list-container" style="max-height: 200px;"></ul>
+            <button class="btn-share" onclick="shareLiveSyncLink()">🔗 Share Room Link with Other Devices</button>
+            <ul id="favorites-list" class="list-container" style="max-height: 220px;"></ul>
         </div>
 
         <!-- Selected Location & Nav Actions -->
@@ -342,7 +347,7 @@
             <h3 id="loc-title">Selected Location</h3>
             <p id="loc-address">Address details will appear here.</p>
             
-            <button class="btn-save-fav" onclick="saveCurrentToFavorites()">⭐ Save & Sync To All Devices</button>
+            <button class="btn-save-fav" onclick="saveCurrentToFavorites()">⭐ Save & Sync To Live Map</button>
 
             <div class="nav-buttons">
                 <a id="btn-gmaps" class="nav-btn btn-gmaps" target="_blank">Google Maps</a>
@@ -356,11 +361,11 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <script>
-        // Public Cloud Storage Bucket ID
-        const CLOUD_BUCKET = "3a8K9b2C1xL7zP9Q"; 
+    <!-- Paho MQTT WebSockets Engine for Realtime WebSockets -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
 
-        // Initialize Map over Malaysia
+    <script>
+        // 1. Initialize Map centered over Malaysia (Peninsular + East Malaysia)
         const map = L.map('map').setView([4.2105, 108.9758], 6);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -371,8 +376,9 @@
         let searchMarker = null;
         let activeSelectedData = null; 
         let favoriteMarkersOnMap = [];
-        let favorites = [];
-        let currentSyncId = "SABAH-KL-HOUSES";
+        let favorites = JSON.parse(localStorage.getItem('my_malaysia_favs')) || [];
+        let currentRoom = "SABAH-KL-ROOM1";
+        let mqttClient = null;
 
         const starIcon = L.divIcon({
             className: 'star-marker-icon',
@@ -381,58 +387,111 @@
             iconAnchor: [15, 15]
         });
 
-        // 1. Read Sync ID from URL hash if opening shared link
+        // 2. Check for Room ID in URL Hash (#sync=SABAH-KL-ROOM1)
         const hashMatch = window.location.hash.match(/sync=([A-Za-z0-9_-]+)/);
         if (hashMatch && hashMatch[1]) {
-            currentSyncId = hashMatch[1].toUpperCase();
+            currentRoom = hashMatch[1].toUpperCase();
         }
-        document.getElementById('sync-id-input').value = currentSyncId;
+        document.getElementById('sync-id-input').value = currentRoom;
 
-        // 2. Fetch Initial Cloud Data & Start Background Sync Poller
-        syncFromCloud();
-        setInterval(syncFromCloud, 3000); // Checks for changes every 3 seconds!
+        // Render any locally cached favorites first
+        renderFavorites();
 
-        // Change Sync ID Group
-        function changeSyncGroup(newSyncId) {
-            if (!newSyncId.trim()) return;
-            currentSyncId = newSyncId.trim().toUpperCase();
-            document.getElementById('sync-id-input').value = currentSyncId;
-            window.location.hash = `sync=${currentSyncId}`;
-            syncFromCloud();
-            alert(`Connected to Sync Group: "${currentSyncId}"`);
+        // 3. Connect to Global MQTT WebSockets Broker (EMQX Public SSL)
+        initMqttConnection();
+
+        function initMqttConnection() {
+            const statusBadge = document.getElementById('status-indicator');
+            statusBadge.innerText = '🟡 Connecting...';
+            statusBadge.classList.remove('online');
+
+            const clientId = "my_app_client_" + Math.random().toString(36).substring(2, 10);
+            // Connect over WSS (WebSocket Secure) Port 8084
+            mqttClient = new Paho.MQTT.Client("broker.emqx.io", 8084, clientId);
+
+            mqttClient.onConnectionLost = onConnectionLost;
+            mqttClient.onMessageArrived = onMessageArrived;
+
+            mqttClient.connect({
+                useSSL: true,
+                cleanSession: false,
+                timeout: 10,
+                keepAliveInterval: 30,
+                onSuccess: onConnectSuccess,
+                onFailure: onConnectFailure
+            });
         }
 
-        // Push Favorites to Cloud Storage
-        async function pushToCloud() {
+        function onConnectSuccess() {
+            const statusBadge = document.getElementById('status-indicator');
+            statusBadge.innerText = '🟢 Live Synced';
+            statusBadge.classList.add('online');
+
+            // Subscribe to topic channel for current Sync Room
+            const topic = "malaysia_house_sync_2026/" + currentRoom;
+            mqttClient.subscribe(topic, { qos: 1 });
+            console.log("Subscribed to MQTT Topic: " + topic);
+        }
+
+        function onConnectFailure(err) {
+            console.error("MQTT Connect Failed:", err);
+            const statusBadge = document.getElementById('status-indicator');
+            statusBadge.innerText = '🔴 Reconnecting...';
+            statusBadge.classList.remove('online');
+            setTimeout(initMqttConnection, 4000); // Retry connection
+        }
+
+        function onConnectionLost(responseObject) {
+            console.warn("Connection lost:", responseObject.errorMessage);
+            const statusBadge = document.getElementById('status-indicator');
+            statusBadge.innerText = '🔴 Reconnecting...';
+            statusBadge.classList.remove('online');
+            setTimeout(initMqttConnection, 3000);
+        }
+
+        // 4. Realtime Message Received from another device!
+        function onMessageArrived(message) {
             try {
-                document.getElementById('status-indicator').innerText = '⏳ Syncing...';
-                await fetch(`https://kvdb.io/${CLOUD_BUCKET}/${currentSyncId}`, {
-                    method: 'POST',
-                    body: JSON.stringify(favorites)
-                });
-                document.getElementById('status-indicator').innerText = '🟢 Cloud Sync Active';
-            } catch (err) {
-                console.error("Cloud Push Error:", err);
-            }
-        }
-
-        // Fetch Favorites from Cloud Storage
-        async function syncFromCloud() {
-            try {
-                const res = await fetch(`https://kvdb.io/${CLOUD_BUCKET}/${currentSyncId}`);
-                if (res.ok) {
-                    const cloudData = await res.json();
-                    if (Array.isArray(cloudData)) {
-                        // Only update if cloud data has changed
-                        if (JSON.stringify(cloudData) !== JSON.stringify(favorites)) {
-                            favorites = cloudData;
-                            renderFavorites();
-                        }
-                    }
+                const incomingData = JSON.parse(message.payloadString);
+                if (Array.isArray(incomingData)) {
+                    favorites = incomingData;
+                    localStorage.setItem('my_malaysia_favs', JSON.stringify(favorites));
+                    renderFavorites();
                 }
-            } catch (err) {
-                // Key doesn't exist yet in cloud
+            } catch (e) {
+                console.error("Failed to parse incoming payload", e);
             }
+        }
+
+        // 5. Broadcast Favorites to Cloud WebSockets
+        function broadcastFavoritesToCloud() {
+            if (!mqttClient || !mqttClient.isConnected()) {
+                console.warn("MQTT not connected yet, saving locally.");
+                return;
+            }
+
+            const topic = "malaysia_house_sync_2026/" + currentRoom;
+            const payload = JSON.stringify(favorites);
+
+            const message = new Paho.MQTT.Message(payload);
+            message.destinationName = topic;
+            message.qos = 1;
+            message.retained = true; // Retains message so newly opening devices get it immediately!
+
+            mqttClient.send(message);
+        }
+
+        // Change Sync Room Group
+        function joinSyncRoom(newRoomId) {
+            if (!newRoomId || !newRoomId.trim()) return;
+            currentRoom = newRoomId.trim().toUpperCase();
+            document.getElementById('sync-id-input').value = currentRoom;
+            window.location.hash = `sync=${currentRoom}`;
+
+            if (mqttClient && mqttClient.isConnected()) {
+                initMqttConnection(); // Re-connect & subscribe to new topic room
+            }
+            alert(`Joined Sync Room: "${currentRoom}"`);
         }
 
         // Switch Tabs
@@ -449,7 +508,7 @@
             }
         }
 
-        // Search Address
+        // Search Address in Malaysia
         async function searchLocation() {
             const query = document.getElementById('address-input').value.trim();
             const resultsList = document.getElementById('results-list');
@@ -475,7 +534,7 @@
                     resultsList.appendChild(li);
                 });
             } catch (error) {
-                alert("Search failed. Check your internet.");
+                alert("Search failed. Please check internet connection.");
             }
         }
 
@@ -522,8 +581,8 @@
             }
         });
 
-        // Save Current Location -> Push to Cloud
-        async function saveCurrentToFavorites() {
+        // Save Current Location -> Broadcast via WebSockets
+        function saveCurrentToFavorites() {
             if (!activeSelectedData) return;
 
             const name = prompt("Enter a label for this location:\n(e.g., My House, Mom's House, Sabah Office)", "My Saved Place");
@@ -538,9 +597,12 @@
             };
 
             favorites.push(newFav);
+            localStorage.setItem('my_malaysia_favs', JSON.stringify(favorites));
             renderFavorites();
-            await pushToCloud(); // Upload to Cloud!
-            alert(`Saved "${name}" and synced to cloud! ⭐`);
+
+            // Broadcast real-time update to all connected devices!
+            broadcastFavoritesToCloud();
+            alert(`Saved "${name}" and broadcasted to all devices! ⭐`);
         }
 
         // Render Favorites List & Star Markers
@@ -579,22 +641,23 @@
 
         // Share Sync Link
         function shareLiveSyncLink() {
-            const shareableUrl = `${window.location.origin}${window.location.pathname}#sync=${currentSyncId}`;
+            const shareableUrl = `${window.location.origin}${window.location.pathname}#sync=${currentRoom}`;
 
             navigator.clipboard.writeText(shareableUrl).then(() => {
-                alert(`🔗 Link copied!\n\nSync Code: "${currentSyncId}"\n\nSend this link to your second device or friend. Whatever is added on one device will show up on the other!`);
+                alert(`🔗 Room Link copied!\n\nRoom ID: "${currentRoom}"\n\nSend this link to your other device. Once opened, whatever you add or delete will update on both screens instantly!`);
             }).catch(() => {
                 prompt("Copy this Live Sync Link:", shareableUrl);
             });
         }
 
         // Delete Favorite
-        async function deleteFavorite(id, event) {
+        function deleteFavorite(id, event) {
             event.stopPropagation();
             if (confirm("Delete this star location?")) {
                 favorites = favorites.filter(fav => fav.id !== id);
+                localStorage.setItem('my_malaysia_favs', JSON.stringify(favorites));
                 renderFavorites();
-                await pushToCloud(); // Sync deletion to cloud
+                broadcastFavoritesToCloud(); // Sync deletion across devices
             }
         }
 
